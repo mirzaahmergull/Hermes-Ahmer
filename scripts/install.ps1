@@ -5,6 +5,7 @@
 #   -Stage NAME [-Json]   run one stage
 #   -NonInteractive       skip stages that need input
 #   -IncludeDesktop       add the desktop build stage
+#   -SignedPython PATH    use an official PSF-signed Python matching pm/lock.json
 #   -ProtocolVersion      print the stage protocol version
 #   -SkipBrowser          do not install the browser tools (agent-browser +
 #                         Chromium); remembered by later installs and
@@ -28,6 +29,7 @@ param(
     # installs and `hermes update` keep the browser tools off until
     # `hermes pm install agent-browser` opts back in.
     [switch]$SkipBrowser,
+    [string]$SignedPython = "",
     # Print the paths this install would use, as JSON on stdout, and exit
     # without touching anything. The first question on any "installer says a
     # path doesn't exist" report is which paths it actually resolved --
@@ -894,10 +896,33 @@ function Get-BootstrapPython {
     # The full ladder runs every stage in one process and four of them need
     # this interpreter; resolve uv and Python once per process.
     if ($script:BootstrapPython) { return $script:BootstrapPython }
-    $uv = Get-Uv
     $lock = Get-Content (Join-Path $InstallDir "pm\lock.json") -Raw | ConvertFrom-Json
     $pyPin = $lock.packages.python
-    $pyVersion = if ($pyPin) { ($pyPin.version -split '\+')[0] -replace '^(\d+\.\d+).*', '$1' } else { '3.14' }
+    $requestedVersion = if ($pyPin) { ($pyPin.version -split '\+')[0] } else { $null }
+    if ($SignedPython) {
+        if (-not $requestedVersion) { Fail 'signed Python requires a pm/lock.json Python pin' }
+        $resolved = (Resolve-Path -LiteralPath $SignedPython -ErrorAction Stop).ProviderPath
+        if ([IO.Path]::GetFileName($resolved) -ine 'python.exe') { Fail "signed Python must be python.exe" }
+        $root = Split-Path -Parent $resolved
+        $digits = ($requestedVersion -split '\.')[0..1] -join ''
+        foreach ($file in @($resolved, (Join-Path $root "python$digits.dll"),
+            (Join-Path $root 'DLLs\_ssl.pyd'), (Join-Path $root 'DLLs\_hashlib.pyd'),
+            (Join-Path $root 'DLLs\libssl-3.dll'), (Join-Path $root 'DLLs\libcrypto-3.dll'))) {
+            $sig = Get-AuthenticodeSignature -LiteralPath $file -ErrorAction Stop
+            if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Python Software Foundation(,|$)') {
+                Fail "invalid Python Software Foundation signature: $file"
+            }
+        }
+        $actual = (& $resolved -I -c "import ssl,sys; print('.'.join(map(str,sys.version_info[:3])))") -join ''
+        if ($LASTEXITCODE -or $actual.Trim() -ne $requestedVersion) {
+            Fail "requested Python version $requestedVersion, found $actual"
+        }
+        $env:HERMES_PM_SIGNED_PYTHON = $resolved
+        $script:BootstrapPython = $resolved
+        return $resolved
+    }
+    $uv = Get-Uv
+    $pyVersion = if ($requestedVersion) { $requestedVersion -replace '^(\d+\.\d+).*', '$1' } else { '3.14' }
     # A bare version lets uv pick emulated x86_64 on Windows-on-ARM.
     $pyArch = if ((Get-WindowsArch) -eq 'arm64') { 'aarch64' } else { 'x86_64' }
     $pyRequest = "cpython-$pyVersion-windows-$pyArch-none"
@@ -921,6 +946,7 @@ function Invoke-BootstrapPm {
         # param() binding is not in $script: scope (see Initialize-ResolvedPaths).
         $pmArgs = @('install')
         if ($SkipBrowser) { $pmArgs += @('--without', 'agent-browser') }
+        if ($SignedPython) { $pmArgs += @('--signed-python', $SignedPython) }
         Invoke-Logged "Installing dependencies (hash-verified via uv.lock)" { & $bootPy -m pm.cli @pmArgs }
         if ($LASTEXITCODE) { Fail "dependency install failed" }
     } finally {

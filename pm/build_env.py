@@ -14,6 +14,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--source", type=Path)
     parser.add_argument("--out", type=Path)
     parser.add_argument("--python", type=Path)
+    parser.add_argument("--signed-python", type=Path,
+                        help="Windows: verify a PSF-signed interpreter matching pm/lock.json")
     parser.add_argument("--cache", type=Path)
     parser.add_argument("--extra", dest="extras", action="append", default=[])
     parser.add_argument("--group", dest="groups", action="append", default=[])
@@ -39,6 +41,28 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--requirements", type=Path)
     parser.add_argument("--requirement", action="append", default=[])
     args = parser.parse_args(argv)
+    if args.signed_python is not None:
+        if args.python is not None:
+            parser.error("--signed-python and --python cannot be combined")
+        import os
+        from pm.install import _lockfile
+        from pm.signed_python import KEY, validate
+        try:
+            args.python = validate(args.signed_python, _lockfile().version("python").split("+")[0])
+        except (pm.InstallError, OSError) as exc:
+            print(f"python environment: {exc}", file=sys.stderr)
+            return 1
+        os.environ[KEY] = str(args.python)
+    try:
+        return _execute(args, parser)
+    finally:
+        if args.signed_python is not None:
+            os.environ.pop(KEY, None)
+
+
+def _execute(args, parser) -> int:
+    import pm
+
     requirements = list(args.requirement)
     if args.requirements is not None:
         requirements.extend(line.strip() for line in args.requirements.read_text(encoding="utf-8-sig").splitlines()

@@ -21,6 +21,8 @@ def _toolchain(*, realize: bool = True, explicit: bool = False) -> tuple[Path, P
         ensure, lazy_installs_allowed, sealed,
     )
 
+    from pm.signed_python import selected
+    signed_python = selected()
     if realize:
         ensure("uv", explicit=explicit)
 
@@ -28,6 +30,9 @@ def _toolchain(*, realize: bool = True, explicit: bool = False) -> tuple[Path, P
     target = current_target()
     binaries = {}
     for name in ("uv", "python"):
+        if name == "python" and signed_python is not None:
+            binaries[name] = signed_python
+            continue
         package = get_package(name)
         location = _installed_location(package, lockfile, target)
         if location is None:

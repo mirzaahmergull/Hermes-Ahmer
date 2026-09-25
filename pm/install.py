@@ -466,6 +466,9 @@ def ensure(
     lockfile = _lockfile()
     target = current_target()
     chain = walk([name])
+    from pm.signed_python import selected
+    if selected() is not None:
+        chain = [package for package in chain if package.name != "python"]
     checked = _operation.checked if _operation is not None else set()
     if _operation is not None:
         _operation.lock()

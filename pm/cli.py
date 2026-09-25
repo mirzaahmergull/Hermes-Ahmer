@@ -353,7 +353,11 @@ def cmd_install(args) -> int:
     if error:
         print(f"✗ {error}")
         return 1
+    from pm.signed_python import selected
+    signed_python = selected()
     names = args.names if args.names or extras else source_install_packages(_lockfile().names())
+    if signed_python is not None:
+        names = [name for name in names if name != "python"]
     without = list(dict.fromkeys(getattr(args, "without", None) or ()))
     if without:
         from pm.defaults import record_declined
@@ -405,6 +409,9 @@ def cmd_install(args) -> int:
 
         record_activation_inputs(activation_inputs_dir(repo_root()), input_mtimes, repo_root(),
                                  test_environment=test_environment is not None)
+    if not failed and args.signed_python is not None:
+        from pm.signed_python import record
+        record(signed_python)
     return 1 if failed else 0
 
 
@@ -792,6 +799,8 @@ def main(argv=None) -> int:
     p.set_defaults(func=cmd_lock)
 
     p = sub.add_parser("install", help="install packages (default: all required + optional defaults)")
+    p.add_argument("--signed-python", type=Path, metavar="PYTHON.EXE",
+                   help="Windows only: opt into a PSF-signed external interpreter matching pm/lock.json")
     p.add_argument("names", nargs="*")
     p.add_argument("--extra", action="append", default=[], metavar="NAME",
                    help="enable a declared dependency extra in the venv (repeatable)")
@@ -812,6 +821,9 @@ def main(argv=None) -> int:
         "CI host); requires explicit package names",
     )
     p.set_defaults(func=cmd_install)
+
+    p = sub.add_parser("reset-signed-python", help="remove this install's external Python opt-in; next install uses pinned Python")
+    p.set_defaults(func=None)
 
     p = sub.add_parser("env", help="print composed env of installed packages")
     p.add_argument("names", nargs="*")
@@ -847,11 +859,23 @@ def main(argv=None) -> int:
     p.set_defaults(func=cmd_update)
 
     args = parser.parse_args(argv)
+    if args.cmd == "reset-signed-python":
+        from pm.signed_python import KEY, reset
+        import os
+        reset()
+        os.environ.pop(KEY, None)
+        print("✓ signed Python selection removed; run `hermes pm install` to restore the pinned interpreter")
+        return 0
     if args.cmd == "lock" and (args.name is None) != (args.version is None):
         lock_parser.error("--bump NAME and VERSION go together; run with neither to relock uv.lock")
     from pm.runtime import is_runtime, run_cli
 
     try:
+        if args.cmd == "install" and args.signed_python is not None:
+            import os
+            from pm.signed_python import KEY, validate
+            python = validate(args.signed_python, _lockfile().version("python").split("+")[0])
+            os.environ[KEY] = str(python)
         if not is_runtime():
             return run_cli(list(sys.argv[1:] if argv is None else argv))
         return args.func(args)

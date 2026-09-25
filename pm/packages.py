@@ -378,6 +378,10 @@ class Venv(StatePackage):
         h.update(_uv_lock_digest(self.project_root() / "uv.lock"))
         h.update(",".join(sorted(extras)).encode())
         h.update(json.dumps(python).encode())
+        from pm.signed_python import selected
+        signed_python = selected()
+        if signed_python is not None:
+            h.update(str(signed_python).encode())
         # Plugin members union into the venv — a changed member set must
         # re-sync even when extras and core lock are unchanged.
         from pm.workspace import enabled_member_dirs, members_stamp
