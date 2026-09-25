@@ -40,6 +40,13 @@ def validate(path: Path, version: str) -> Path:
         "}"
     )
     env = dict(os.environ, HERMES_PM_SIGNATURE_FILES=json.dumps([str(f) for f in files]))
+    # pwsh sets PSModulePath to include its own PowerShell 7 modules. A child
+    # Windows PowerShell 5.1 can discover Get-AuthenticodeSignature there but
+    # cannot load that edition of Microsoft.PowerShell.Security. Let 5.1 build
+    # its default module path instead of inheriting the parent edition's path.
+    for name in tuple(env):
+        if name.lower() == "psmodulepath":
+            env.pop(name)
     try:
         signature = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
                                    env=env, capture_output=True, text=True, timeout=30)

@@ -43,6 +43,15 @@ def test_signed_selection_checks_version_and_dll_signatures(monkeypatch):
             selected()
 
 
+def test_signature_probe_ignores_pwsh_module_path(monkeypatch):
+    from pm.signed_python import validate
+
+    # PowerShell 7 prepends its incompatible built-in modules. Its child
+    # Windows PowerShell must resolve Microsoft.PowerShell.Security itself.
+    monkeypatch.setenv("PSModulePath", r"C:\Program Files\PowerShell\7\Modules")
+    assert validate(_signed_python(), "3.14.7") == _signed_python().resolve()
+
+
 def test_venv_stamp_changes_when_switching_to_signed_python(monkeypatch):
     from pm.packages import Venv
     from pm.signed_python import KEY
