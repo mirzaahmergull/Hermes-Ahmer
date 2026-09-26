@@ -52,6 +52,14 @@ def test_signature_probe_ignores_pwsh_module_path(monkeypatch):
     assert validate(_signed_python(), "3.14.7") == _signed_python().resolve()
 
 
+def test_source_launcher_prefers_selected_signed_python(monkeypatch, tmp_path):
+    from hermes_cli._launchers import resolve_store_python
+    from pm import signed_python
+
+    monkeypatch.setattr(signed_python, "selected", lambda root=None: _signed_python().resolve())
+    assert resolve_store_python(tmp_path) == _signed_python().resolve()
+
+
 def test_venv_stamp_changes_when_switching_to_signed_python(monkeypatch):
     from pm.packages import Venv
     from pm.signed_python import KEY
@@ -100,6 +108,8 @@ def test_signed_selection_survives_fresh_process_without_handoff(tmp_path, monke
     assert selected() is None
     record(python)
     assert selected() == python.resolve()
+    assert selected(tmp_path) == python.resolve()
+    assert selected(tmp_path / "other-install") is None
     code = ("import sys; from pathlib import Path; import pm.paths as p; "
             "p.repo_root=lambda:Path(sys.argv[1]); "
             "p.lockfile_path=lambda:Path(sys.argv[1])/'lock.json'; "

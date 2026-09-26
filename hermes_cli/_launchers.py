@@ -93,7 +93,11 @@ def _is_windows() -> bool:
 
 
 def resolve_store_python(repo_root: Path) -> Path | None:
-    """Read PM's committed Python tool, without adopting unrecorded bytes."""
+    """Resolve this install's validated interpreter before the shared tool store."""
+    from pm.signed_python import selected
+    signed = selected(repo_root)
+    if signed is not None:
+        return signed
     runtime = store_root(repo_root)
     rel = "python.exe" if _is_windows() else "bin/python3"
 

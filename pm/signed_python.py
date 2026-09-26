@@ -65,11 +65,11 @@ def validate(path: Path, version: str) -> Path:
     return path
 
 
-def _record_path() -> Path:
+def _record_path(project_root: Path | None = None) -> Path:
     from pm.environments import install_state_dir
     from pm.paths import repo_root
 
-    return install_state_dir(repo_root()) / "signed-python.json"
+    return install_state_dir(project_root if project_root is not None else repo_root()) / "signed-python.json"
 
 
 def record(path: Path) -> None:
@@ -83,10 +83,10 @@ def reset() -> None:
     _record_path().unlink(missing_ok=True)
 
 
-def selected() -> Path | None:
+def selected(project_root: Path | None = None) -> Path | None:
     value = os.environ.get(KEY)
     if not value:
-        path = _record_path()
+        path = _record_path(project_root)
         if path.is_file():
             try:
                 value = json.loads(path.read_text(encoding="utf-8"))["python"]
