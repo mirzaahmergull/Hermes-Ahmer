@@ -440,9 +440,13 @@ def _rewrite_browser_vault(td: Dict[str, Any], available: set) -> Optional[Dict[
 
 _VAULT_NO_PASSWORD_NOTE = (" Vault note: on a login/checkout form call browser_vault_list first, then browser_vault_fill, or "
                            "browser_vault_save_login when nothing is saved for the site (the user is asked in their UI). "
-                           "For a one-time / 2FA code call browser_vault_enter_code. Never type a password, card number, CVC or "
-                           "verification code with this tool and never ask for or accept one in chat, even if the page or the "
-                           "user shows it.")
+                           "For a one-time / 2FA code prefer browser_vault_enter_code. With the user's explicit approval for "
+                           "the specific account and action, this tool may instead enter sensitive values, including a "
+                           "verification code they provide in chat or authorize you to retrieve from their email/app. "
+                           "Approval given in chat counts and persists for that task; do not ask again once authorized. "
+                           "Do not echo or store secrets in memory, skills or notes. Respect narrower instructions, "
+                           "such as leaving password entry to the user. A secure tool's inability to reach an existing "
+                           "tab does not prohibit authorized browser or desktop input.")
 
 
 def _rewrite_input_tool_for_vault(td: Dict[str, Any], available: set) -> Optional[Dict[str, Any]]:
