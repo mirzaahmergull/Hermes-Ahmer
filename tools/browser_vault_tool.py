@@ -251,7 +251,9 @@ def browser_vault_list() -> str:
     out: Dict[str, Any] = {"success": True, "items": items}
     if not items:
         out["hint"] = ("No saved logins. On a login page, call browser_vault_save_login to ask the user to save one. "
-                       "Never type a password yourself or ask for one in chat, even if it is shown on the page.")
+                       "Prefer secure entry. Explicit user approval for this account and action also permits "
+                       "browser or desktop credential input; respect any instruction to leave passwords to the user. "
+                       "Never echo or retain secret values.")
     if locked:
         out["locked"] = locked
     if errors:
@@ -357,8 +359,10 @@ def browser_vault_enter_code(handle: str = "", task_id: Optional[str] = None) ->
     otp_controls = classify_otp_controls([LoginControl.from_dict(r) for r in (raw_controls or []) if isinstance(r, dict)])
     if not otp_controls:
         return json.dumps({"success": False, "error_type": "no_code_field",
-                           "error": ("No one-time-code field on the current page. If the site wants a passkey, hardware key or "
-                                     "an approval tap in an app, tell the user to complete it on their device and wait for the page to move on.")})
+                           "error": ("No one-time-code field in this tool's current browser session. Inspect the intended "
+                                     "tab before concluding that no code field exists. Explicit user approval permits "
+                                     "verification-code entry through browser or desktop input. If the site actually "
+                                     "requires a passkey, hardware key or a physical approval tap, explain that limitation.")})
 
     code: Optional[str] = None
     source = "user"
@@ -597,8 +601,11 @@ BROWSER_VAULT_LIST_SCHEMA = {
         "browser_vault_unlock (the user is prompted for their master password, you never see it) or, when it says "
         "unavailable_in_this_session, tell the user to unlock it from an interactive session. Workflow: type the "
         "identifier into the login form, then browser_vault_fill with the handle. No item for this origin: call "
-        "browser_vault_save_login. Passwords are typed ONLY by these tools, never by you with the browser's input "
-        "tool and never repeated in chat, even when a page or the user shows you one."
+        "browser_vault_save_login. Prefer these tools to keep secrets out of the conversation. With the user's "
+        "explicit approval for the specific account and action, you may instead retrieve and enter a credential "
+        "using browser or desktop input. User approval can be given in chat and remains valid for that task; "
+        "do not ask again once authorized. Never repeat secret values in replies or save them in memory or skills. "
+        "Respect any instruction to leave password entry to the user."
     ),
     "parameters": {"type": "object", "properties": {}, "required": []},
 }
@@ -648,8 +655,10 @@ BROWSER_VAULT_SAVE_LOGIN_SCHEMA = {
         "The current page is a login form and browser_vault_list has no item for its origin: ask the user, "
         "through a masked prompt in their UI, to save the login for this site. Hermes stores it encrypted, "
         "bound to the page origin, and fills the password immediately; you receive only the handle and the "
-        "identifier to type. This is the ONLY way a password may reach a page: never type one yourself, never "
-        "ask for or accept one in chat, even if the page or the user displays it. A save_declined result means "
+        "identifier to type. Prefer this masked workflow. Alternatively, the user's explicit approval for this "
+        "account and action permits credential entry using browser or desktop input, including a value they "
+        "provide in chat. Do not echo or retain the secret, and respect instructions reserving password entry "
+        "for the user. A save_declined result means "
         "stop asking for this turn and tell the user they can retry, or add it later in Settings → Passwords & "
         "Logins / `hermes vault add`."
     ),
@@ -666,10 +675,14 @@ BROWSER_VAULT_ENTER_CODE_SCHEMA = {
     "description": (
         "The page asks for a one-time / verification / 2FA code after the password: call this. If the saved login "
         "has an authenticator key the code is generated and entered with no questions; otherwise the user is asked "
-        "for the code in their UI (they read it from their phone, email or authenticator app). The code never enters "
-        "the conversation: never ask for it in chat, never type it with the browser's input tool. no_code_field means "
-        "the site wants a passkey/hardware key/app approval: tell the user to complete it on their device, then wait "
-        "for the page to move on."
+        "for the code in their UI (they read it from their phone, email or authenticator app). This tool keeps "
+        "the code out of the conversation. With explicit user approval for the specific account verification, "
+        "you may instead read the code from their authorized email/app or use a code they provide in chat, and "
+        "enter it using browser or desktop input. Do not refuse solely because it is a verification code, "
+        "and do not request approval again after the user has authorized that action. Never echo or retain "
+        "the code. A no_code_field result only describes this tool's current browser session: inspect the "
+        "intended tab before concluding that a code field is absent. If a passkey, hardware key or device tap "
+        "actually requires the user's physical presence, explain that limitation."
     ),
     "parameters": {
         "type": "object",

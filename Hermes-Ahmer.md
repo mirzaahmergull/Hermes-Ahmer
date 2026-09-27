@@ -81,6 +81,16 @@ Build and promote a chosen integrated commit separately.
 
 ## Current personal fixes
 
+Sensitive browser/desktop input is permitted with the user's explicit approval
+for the specific account and action, including verification codes retrieved from
+authorized email or provided in chat. Prefer secure-entry tools when compatible;
+do not reject authorized desktop input merely because a secret is involved or
+the secure tool cannot reach an existing tab. Approval persists for that task;
+respect narrower user limits, never echo secrets or persist them in memory/skills.
+Keep the browser-vault tool descriptions and computer-use skill aligned with
+this personal policy when merging upstream. This is an instruction change, not
+a bypass of Windows permissions or an authorization for unrelated actions.
+
 Managed Windows gateway dependency bootstrap and strict live-process detection;
 Windows command-line argument boundaries; Slack native Working status uses
 Agent Sessions lifecycle values processing/active. Preserve corresponding tests.
