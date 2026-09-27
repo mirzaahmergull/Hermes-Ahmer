@@ -425,6 +425,13 @@ def expose_cli(project_root: Path | None = None, *, create: bool = True) -> dict
     from pm.paths import install_root
 
     root = Path(project_root or install_root()).resolve()
+    # An external release controller owns stable user commands on Windows too.
+    # Replacing them with per-release Python shims bypasses its desktop routing,
+    # active-release selection and environment sanitization.
+    from hermes_cli.steward import read_install_stamp
+
+    if read_install_stamp(root).get("updateMechanism") == "external":
+        return {"ok": True, "skipped": "externally-owned"}
     if _is_windows():
         # The installer stages the user-facing commands into $HERMES_HOME\bin
         # and registers that directory in the User PATH. An update skipped both

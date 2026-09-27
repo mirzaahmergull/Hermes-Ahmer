@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BOOT_FILES = (
     "hermes_bootstrap.py", "hermes_constants.py", "hermes_cli/__init__.py", "hermes_cli/_launchers.py",
     "pm/environments.py", "pm/filesystem.py", "pm/paths.py", "hermes_cli/runtime_state.py",
+    "pm/signed_python.py", "pm/package.py",
     "hermes_cli/_early_recovery.py", "hermes_cli/_parser.py",
     "hermes_cli/venv_sync.py", "hermes_cli/steward.py",
     "hermes_cli/stderr_timestamp.py",
@@ -231,7 +232,7 @@ def test_materializer_cli_refuses_missing_store_without_publishing(tmp_path, mon
     orphan.touch()  # uncommitted tool bytes are not an installed interpreter
     out = tmp_path / "bin"
     result = subprocess.run([sys.executable, "-I", str(repo / "hermes_cli/_launchers.py"), str(out)],
-                            cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", timeout=30)
+                                cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "store interpreter" in result.stderr
     assert not out.exists() or not list(out.iterdir())

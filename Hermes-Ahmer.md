@@ -62,6 +62,9 @@ It must never pull official main, download official ZIP replacements, or use
 official Electron update feeds. Development updates use the Git workflow below.
 Gateway chat updates must not stop their own hosting process; use PowerShell.
 Keep these safeguards when merging upstream changes to any update entry point.
+Windows startup exposure must respect the external install stamp and leave the
+controller-owned default-home launchers intact. Per-release launcher repair
+must not bypass desktop routing, active selection or credential sanitization.
 
 ## Upstream synchronization
 
