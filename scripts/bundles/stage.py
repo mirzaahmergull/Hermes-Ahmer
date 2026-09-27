@@ -20,6 +20,7 @@ def main(argv=None) -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--ref", default="HEAD")
     parser.add_argument("--cache", type=Path, help="persistent uv build cache")
+    parser.add_argument("--tools", type=Path, help="reusable pinned tool store (PM validates the lock)")
     parser.add_argument("--tui", type=Path)
     parser.add_argument("--web", type=Path)
     args = parser.parse_args(argv)

@@ -29,6 +29,12 @@ frontends, and runs candidate checks against an isolated home. Production must
 not import code, editable packages, frontend assets, or dependency files from
 the development checkout. A build is not a deployment.
 
+The build also packages the light desktop app and binds its backend to the
+selected contained release. Its existing Roaming\\Hermes profile and app identity
+stay unchanged. The Start Menu shortcut follows the stable production launcher.
+Pinned tools are cached under Hermes-Ahmer-builds\\cache and validated by PM
+against the selected commit's lock; caches are never user configuration.
+
 `ahmer-release deploy` promotes a verified candidate, gracefully stopping the
 gateway, backing up production user data and launcher scripts, switching the
 active release, regenerating gateway launch scripts and checking liveness.

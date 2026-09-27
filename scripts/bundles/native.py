@@ -124,6 +124,8 @@ def stage_native(args) -> int:
                "PYTHONPATH": os.pathsep.join([str(root), *filter(None, sys.path)])}
         command = [sys.executable, "-B", "-m", "scripts.bundles.native", "--out", str(out),
                    "--ref", args.ref or "HEAD", "--source", str(root)]
+        if getattr(args, "tools", None) is not None:
+            command += ["--tools", str(args.tools)]
         for name, product in getattr(args, "frontends", {}).items():
             command += [f"--{name}", str(product)]
         return subprocess.run(command, cwd=root, env=env).returncode
@@ -327,6 +329,7 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--ref", default="HEAD")
     parser.add_argument("--source", type=Path, required=True)
+    parser.add_argument("--tools", type=Path)
     parser.add_argument("--tui", type=Path)
     parser.add_argument("--web", type=Path)
     args = parser.parse_args()

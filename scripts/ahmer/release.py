@@ -85,9 +85,17 @@ def build(ref):
     env = isolated(job / 'home')
     # Build from the independent committed source, never from the development tree.
     command = [BOOTSTRAP, '-B', source / 'scripts/bundles/stage.py',
-               '--out', release, '--ref', sha, '--cache', BUILDS / 'cache/uv']
+               '--out', release, '--ref', sha, '--cache', BUILDS / 'cache/uv',
+               '--tools', BUILDS / 'cache/tools']
     with (job / 'build.log').open('w', encoding='utf-8') as log:
         run(command, cwd=source, env=env, stdout=log, stderr=subprocess.STDOUT)
+    desktop_env = dict(env, HERMES_RUNTIME_DIR=str(BUILDS / 'cache/desktop/tools'))
+    with (job / 'desktop.log').open('w', encoding='utf-8') as log:
+        run([BOOTSTRAP, '-B', source / 'scripts/bundles/desktop.py', '--commit', sha,
+             '--variant', 'light', '--work', job / 'desktop', '--cache',
+             BUILDS / 'cache/desktop', '--', '--dir'], cwd=source, env=desktop_env,
+            stdout=log, stderr=subprocess.STDOUT)
+    shutil.copytree(source / 'apps/desktop/release/win-unpacked', release / 'desktop')
     stamp = {'schemaVersion': 2, 'commit': sha, 'branch': 'main',
              'source': 'commit-build', 'updateMechanism': 'external',
              'payload': 'runtime', 'dirty': False, 'baseVersion': '0.21.5',
@@ -110,6 +118,7 @@ def verify(release, home):
     if manifest.get('ref') != metadata['commit']:
         raise RuntimeError('Package revision differs from release receipt')
     for item in ('hermes-agent/Hermes-Ahmer.md', 'bin/hermes.exe',
+                 'desktop/Hermes.exe',
                  'hermes-agent/hermes_cli/tui_dist/dist/entry.js',
                  'hermes-agent/hermes_cli/web_dist/index.html'):
         if not (release / item).is_file():
@@ -152,6 +161,12 @@ def backup():
          'SYSTEM:(OI)(CI)F'], stdout=subprocess.DEVNULL)
     skip = {'hermes-agent', 'tools', 'installs', 'cache', 'audio_cache', 'image_cache'}
     shutil.copytree(HOME, directory / 'home', ignore=lambda p, names: skip.intersection(names) if Path(p) == HOME else [])
+    desktop_home = Path(os.environ['APPDATA']) / 'Hermes'
+    if desktop_home.exists():
+        shutil.copytree(desktop_home, directory / 'desktop-home')
+    shortcut = Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/Hermes.lnk'
+    if shortcut.exists():
+        shutil.copyfile(shortcut, directory / 'Hermes.lnk')
     run(['schtasks', '/Query', '/TN', 'Hermes_Gateway', '/XML'],
         stdout=(directory / 'gateway-task.xml').open('w', encoding='utf-8'))
     write(directory / 'inventory.json', user_inventory())
@@ -176,6 +191,12 @@ def database_check():
                 print(f'{name}: ok')
 
 
+def desktop_shortcut():
+    # Keep the existing application identity and Roaming profile.
+    script = "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:APPDATA+'\\Microsoft\\Windows\\Start Menu\\Programs\\Hermes.lnk');$s.TargetPath='C:\\Windows\\System32\\wscript.exe';$s.Arguments='\"C:\\Hermes-Ahmer\\bin\\desktop.vbs\"';$s.WorkingDirectory='C:\\Hermes-Ahmer';$s.Save()"
+    run(['powershell.exe', '-NoProfile', '-Command', script])
+
+
 def deploy(rollback=False):
     selected = ROOT / ('previous.json' if rollback else 'candidate.json')
     receipt = read(selected)
@@ -192,6 +213,9 @@ def deploy(rollback=False):
         write(ROOT / 'active.json', receipt)
         write(ROOT / 'previous.json', {**current, 'backup': str(saved)})
         original_cli('gateway', 'start')
+        if receipt.get('backup') and (Path(receipt['backup']) / 'Hermes.lnk').exists():
+            shutil.copyfile(Path(receipt['backup']) / 'Hermes.lnk',
+                            Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/Hermes.lnk')
         print('Original installation restored; newer data snapshot retained at ' + str(saved))
         return
     release = Path(receipt['path']).resolve()
@@ -235,6 +259,7 @@ def deploy(rollback=False):
         if 'Gateway process running' not in result.stdout:
             raise RuntimeError('Gateway failed to remain alive: ' + result.stdout)
         print(result.stdout)
+        desktop_shortcut()
         after = user_inventory()
         changed = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
         write(ROOT / 'deployment.json', {'release': receipt['id'], 'backup': str(saved),
@@ -243,12 +268,21 @@ def deploy(rollback=False):
             print('User files changed during startup; review deployment.json: ' + ', '.join(changed))
         database_check()
     except Exception:
-        cli(release, 'gateway', 'stop')
+        with contextlib.suppress(Exception):
+            cli(release, 'gateway', 'stop')
+        shutil.copytree(saved / 'home', HOME, dirs_exist_ok=True)
+        shortcut = saved / 'Hermes.lnk'
+        if shortcut.exists():
+            shutil.copyfile(shortcut, Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/Hermes.lnk')
         if current:
             write(ROOT / 'active.json', current)
+            if current.get('kind') == 'original': original_cli('gateway', 'start')
+            else: cli(Path(current['path']), 'gateway', 'start')
         else:
             for name in ('hermes.cmd', 'hermes-acp.cmd'):
                 shutil.copyfile(ROOT / 'original' / name, HOME / 'bin' / name)
+            write(ROOT / 'active.json', read(ROOT / 'previous.json'))
+            original_cli('gateway', 'start')
         raise
     print(f'Production deployed: {receipt["id"]}; data remains at {HOME}')
 
@@ -290,6 +324,20 @@ sys.exit(subprocess.call([str(root / 'bin' / name), *args], env=env))
 ''', encoding='utf-8')
     (bindir / 'hermes.cmd').write_text(
         f'@echo off\n"{BOOTSTRAP}" -I "{bindir / "run.py"}" %*\n', encoding='utf-8')
+    (bindir / 'desktop.py').write_text('''import json, os, subprocess
+from pathlib import Path
+root = Path(json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())['path'])
+manifest = json.loads((root / 'manifest.json').read_text())
+env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
+           HERMES_RUNTIME_DIR=str(root / 'tools'),
+           HERMES_DESKTOP_HERMES_ROOT=str(root / 'hermes-agent'),
+           HERMES_DESKTOP_PYTHON=str(root / manifest['runtime']['storePython']))
+for key in ('PYTHONPATH', 'PYTHONHOME', 'VIRTUAL_ENV'):
+    env.pop(key, None)
+subprocess.Popen([str(root / 'desktop/Hermes.exe')], env=env, cwd=root)
+''', encoding='utf-8')
+    (bindir / 'desktop.vbs').write_text(
+        f'CreateObject("WScript.Shell").Run """{BOOTSTRAP}"" -I ""{bindir / "desktop.py"}""", 0, False\n', encoding='utf-8')
 
 
 def main():
