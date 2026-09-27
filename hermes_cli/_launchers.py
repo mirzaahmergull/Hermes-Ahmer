@@ -71,6 +71,16 @@ def installation_command(repo_root: Path, args=(), *, module: str = "hermes_cli.
     the managed Python pin changes.
     """
     root = Path(repo_root)
+    manifest_path = root.parent / "manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+        if (root.parent / manifest.get("repo", "")).resolve() == root.resolve():
+            if module != "hermes_cli.main":
+                return runtime_command(root, args, module=module, python=python, home=home)
+            command = (root.parent / manifest["runtime"]["commands"]["hermes"]).resolve()
+            if not command.is_relative_to(root.parent.resolve()) or not command.is_file():
+                raise RuntimeError("Invalid contained Hermes launcher")
+            return [str(command), *args]
     if resolve_store_python(root) is None:
         return runtime_command(root, args, module=module, python=python, home=home)
     prefix = [] if module == "hermes_cli.main" else ["--run-module", module]

@@ -89,7 +89,7 @@ def build(ref):
     with (job / 'build.log').open('w', encoding='utf-8') as log:
         run(command, cwd=source, env=env, stdout=log, stderr=subprocess.STDOUT)
     stamp = {'schemaVersion': 2, 'commit': sha, 'branch': 'main',
-             'source': 'ahmer-release', 'updateMechanism': 'ahmer-local',
+             'source': 'commit-build', 'updateMechanism': 'external',
              'payload': 'runtime', 'dirty': False, 'baseVersion': '0.21.5',
              'displayVersion': f'Hermes-Ahmer {sha[:12]}', 'builtAt': name}
     write(release / 'hermes-agent/install-stamp.json', stamp)
@@ -202,8 +202,10 @@ def deploy(rollback=False):
         print('Selected release is already active')
         return
     # Never run concurrent gateways against the same user home.
-    old = Path(current['path']) if current else None
-    if old:
+    old = Path(current['path']) if current and current.get('kind') != 'original' else None
+    if current and current.get('kind') == 'original':
+        original_cli('gateway', 'stop')
+    elif old:
         cli(old, 'gateway', 'stop')
     else:
         run([HOME / 'bin/hermes.cmd', 'gateway', 'stop'])
@@ -212,6 +214,8 @@ def deploy(rollback=False):
         for name in ('hermes.cmd', 'hermes-acp.cmd'):
             shutil.copyfile(HOME / 'bin' / name, original / name)
     saved = backup()
+    if rollback and receipt.get('backup'):
+        shutil.copytree(Path(receipt['backup']) / 'home', HOME, dirs_exist_ok=True)
     before = user_inventory()
     database_check()
     if current:
@@ -267,8 +271,14 @@ exit $LASTEXITCODE
 ''', encoding='utf-8')
     (bindir / 'run.py').write_text('''import json, os, subprocess, sys
 from pathlib import Path
-root = Path(json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())['path'])
+selection = json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())
+root = Path(selection['path'])
 args = sys.argv[1:]
+if selection.get('kind') == 'original':
+    env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
+               HERMES_RUNTIME_DIR=str(Path(os.environ['LOCALAPPDATA']) / 'hermes' / 'tools'))
+    env.pop('HERMES_INSTALL_ROOT', None)
+    sys.exit(subprocess.call([r'C:\\Hermes-Ahmer\\original\\hermes.cmd', *args], env=env))
 name = 'hermes.exe'
 if args[:2] == ['--run-module', 'acp_adapter.entry']:
     name, args = 'hermes-acp.exe', args[2:]
