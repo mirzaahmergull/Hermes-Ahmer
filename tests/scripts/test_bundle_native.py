@@ -19,6 +19,24 @@ import pytest
 from scripts.bundles import native
 
 
+def test_staging_worker_cannot_lock_the_payload_interpreter(tmp_path, monkeypatch):
+    """Windows publication must not replace the worker's loaded Python DLLs."""
+    tools, output = tmp_path / 'cached-tools', tmp_path / 'payload'
+    captured = {}
+    monkeypatch.setattr(native, 'current_target', lambda: 'win32-x64')
+
+    def spawn(command, **kwargs):
+        captured.update(command=command, env=kwargs['env'])
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(native.subprocess, 'run', spawn)
+    assert native.stage_native(SimpleNamespace(out=output, ref='HEAD',
+           cache=tmp_path / 'cache', tools=tools, extras=['slack'], frontends={})) == 0
+    assert Path(captured['env']['HERMES_RUNTIME_DIR']) == tools
+    assert not tools.is_relative_to(output)
+    assert captured['command'][captured['command'].index('--tools') + 1] == str(tools)
+
+
 def test_bundle_stages_git_tree_and_runs_native_children_before_manifest(tmp_path, monkeypatch):
     import importlib
     import inspect
