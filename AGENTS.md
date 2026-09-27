@@ -1,5 +1,11 @@
 # Hermes Agent - Development Guide
 
+## Personal fork context
+
+Read [Hermes-Ahmer.md](Hermes-Ahmer.md) before working on this fork. It defines
+Ahmer's development/production separation, preserved user home, release workflow,
+and fork-only update policy. Preserve this section when merging upstream.
+
 Instructions for AI coding assistants and developers working on the hermes-agent codebase.
 This root file holds only what applies everywhere. Each area has its own `AGENTS.md` (aim for
 ~8k chars; `agent/subdirectory_hints.py` delivers up to 32k and truncates head/tail with a warning
