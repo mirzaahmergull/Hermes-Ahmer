@@ -12,6 +12,8 @@ The user owns this policy; upstream AGENTS.md still governs coding conventions.
 - Production: `C:\Hermes-Ahmer\releases\<commit-and-build-id>`.
 - Stable launchers and active-release record: `C:\Hermes-Ahmer\bin` and
   `C:\Hermes-Ahmer\active.json`.
+- The controller has its own pinned Python in `C:\Hermes-Ahmer\controller-runtime`;
+  production does not depend on the developer checkout or the old installation.
 - Production home: `C:\Users\mirza\AppData\Local\hermes`. Keep it in place.
   Skills, configuration, credentials, auth, conversations, databases, memories,
   plugins, cron, pairing and all user state stay here. Never replace it with

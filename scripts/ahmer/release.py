@@ -17,7 +17,7 @@ ROOT = Path(r'C:\Hermes-Ahmer')
 SOURCE = Path(r'C:\dev\Hermes-Ahmer')
 BUILDS = Path(r'C:\dev\Hermes-Ahmer-builds')
 HOME = Path(os.environ['LOCALAPPDATA']) / 'hermes'
-BOOTSTRAP = HOME / 'tools/python-3.14.7+20260901-win32-x64/python.exe'
+BOOTSTRAP = ROOT / 'controller-runtime/python.exe'
 
 
 def read(path):
@@ -292,6 +292,9 @@ def deploy(rollback=False):
 def install_controller():
     bindir = ROOT / 'bin'
     bindir.mkdir(parents=True, exist_ok=True)
+    if not BOOTSTRAP.exists():
+        original_python = HOME / 'tools/python-3.14.7+20260901-win32-x64'
+        shutil.copytree(original_python, BOOTSTRAP.parent)
     shutil.copyfile(__file__, bindir / 'release.py')
     (bindir / 'ahmer-release.cmd').write_text(
         f'@echo off\n"{BOOTSTRAP}" -I "{bindir / "release.py"}" %*\n', encoding='utf-8')
