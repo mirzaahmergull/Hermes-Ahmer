@@ -89,6 +89,16 @@ const identity = {
 
 const { channelBuildRequest } = require('../../scripts/msix-shared.mjs')
 const request = channelBuildRequest()
+// Ahmer's desktop is a thin shell around the separately staged local runtime.
+// Keep the installed Hermes profile and identity across personal commit builds;
+// provenance remains commit-build/external, so official update feeds stay off.
+const personal = !request && require('node:fs').existsSync(
+  require('node:path').resolve(__dirname, '../../Hermes-Ahmer.md')
+)
 module.exports = request
   ? Object.freeze({ ...request.identity, store: false, light: false, channel: request.channel })
-  : identity
+  : personal
+    ? Object.freeze({ ...identity, displayName: 'Hermes', appId: 'com.nousresearch.hermes',
+        appNamePascal: 'Hermes', artifactNamePascal: 'Hermes', windowsExecutableName: 'Hermes',
+        cliName: 'hermes', msixAppIdWithOrg: 'NousResearch.Hermes', channel: null })
+    : identity
