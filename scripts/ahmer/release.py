@@ -50,7 +50,8 @@ def isolated(home):
 
 
 def release_env(release, home=HOME):
-    env = {k: v for k, v in os.environ.items() if not k.startswith(('HERMES_', 'PYTHON'))}
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('HERMES_', 'PYTHON'))
+           and not k.upper().startswith(('DASHSCOPE', 'ALIBABA', 'ALIYUN'))}
     env.update(HERMES_HOME=str(home), PYTHONIOENCODING='utf-8')
     env.update(HERMES_RUNTIME_DIR=str(release / 'tools'),
                HERMES_INSTALL_ROOT=str(release / 'hermes-agent'))
@@ -187,6 +188,8 @@ def original_cli(*args):
     command = ROOT / 'original/hermes.cmd'
     env = dict(os.environ, HERMES_HOME=str(HOME), HERMES_RUNTIME_DIR=str(HOME / 'tools'))
     env.pop('HERMES_INSTALL_ROOT', None)
+    for key in list(env):
+        if key.upper().startswith(('DASHSCOPE', 'ALIBABA', 'ALIYUN')): env.pop(key)
     return run([command, *args], env=env, text=True, encoding='utf-8', timeout=180)
 
 
@@ -376,6 +379,8 @@ if selection.get('kind') == 'original':
     env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
                HERMES_RUNTIME_DIR=str(Path(os.environ['LOCALAPPDATA']) / 'hermes' / 'tools'))
     env.pop('HERMES_INSTALL_ROOT', None)
+    for key in list(env):
+        if key.upper().startswith(('DASHSCOPE', 'ALIBABA', 'ALIYUN')): env.pop(key)
     sys.exit(subprocess.call([r'C:\\Hermes-Ahmer\\original\\hermes.cmd', *args], env=env))
 name = 'hermes.exe'
 if args[:2] == ['--run-module', 'acp_adapter.entry']:
@@ -384,6 +389,8 @@ env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'herme
            HERMES_INSTALL_ROOT=str(root / 'hermes-agent'), HERMES_RUNTIME_DIR=str(root / 'tools'))
 for key in ('PYTHONPATH', 'PYTHONHOME', 'VIRTUAL_ENV'):
     env.pop(key, None)
+for key in list(env):
+    if key.upper().startswith(('DASHSCOPE', 'ALIBABA', 'ALIYUN')): env.pop(key)
 sys.exit(subprocess.call([str(root / 'bin' / name), *args], env=env))
 ''', encoding='utf-8')
     (bindir / 'hermes.cmd').write_text(
@@ -404,6 +411,8 @@ env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'herme
            HERMES_DESKTOP_HERMES_ROOT=str(repo), HERMES_DESKTOP_PYTHON=str(python))
 for key in ('PYTHONPATH', 'PYTHONHOME', 'VIRTUAL_ENV'):
     env.pop(key, None)
+for key in list(env):
+    if key.upper().startswith(('DASHSCOPE', 'ALIBABA', 'ALIYUN')): env.pop(key)
 subprocess.Popen([str(executable)], env=env, cwd=root, stdin=subprocess.DEVNULL,
                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                  creationflags=0x01000000 | 0x08000000 | 0x00000200)
