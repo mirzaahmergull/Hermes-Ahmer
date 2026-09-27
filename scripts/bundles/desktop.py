@@ -90,7 +90,9 @@ def _build_prepared(prepared, builder_args: list[str], variant: str | None) -> N
             raise RuntimeError("prepared payload assembly failed")
     from scripts.bundles.desktop_prepare import require_source
     require_source(repo, request.commit)
-    shutil.copytree(icons / "apps/desktop/assets", desktop / "assets", dirs_exist_ok=True)
+    # Renderer products consume the generated icons above. Packaging uses the
+    # commit's tracked desktop assets: copying generated PNGs into that tree
+    # dirties the admitted checkout and fails the subsequent source check.
     run([node, "scripts/write-build-stamp.mjs"], cwd=desktop, env=env)
     run([node, "scripts/build/desktop.mjs", "--source", str(repo), "--icons", str(icons),
          "--stamp", str(desktop / "build/install-stamp.json"), "--native-deps", str(prepared.native),
