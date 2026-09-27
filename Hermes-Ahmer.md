@@ -89,3 +89,9 @@ config/auth preservation, and SQLite health. Native UI and real Slack message
 delivery require actual end-to-end evidence; do not label mocks as live proof.
 Log commit IDs and test outcomes without secrets. Never promise a backup restore
 will preserve messages received after that backup.
+
+An existing Windows access denial prevents reading the legacy default-home
+`pending_messages` directory. Leave it and its ACL intact. The controller records
+this exact exception in `preserved-in-place.json`; it copies the rest of the
+accessible home and never deletes the unreadable directory during restoration.
+Do not describe this directory as backed up or its contents as verified.

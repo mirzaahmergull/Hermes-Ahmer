@@ -182,6 +182,20 @@ def backup():
     run(['icacls', directory, '/inheritance:r', '/grant:r', f'{user}:(OI)(CI)F',
          'SYSTEM:(OI)(CI)F'], stdout=subprocess.DEVNULL)
     skip = {'hermes-agent', 'tools', 'installs', 'cache', 'audio_cache', 'image_cache'}
+    preserved = []
+    pending = HOME / 'pending_messages'
+    if pending.is_dir():
+        try:
+            with os.scandir(pending) as entries:
+                next(entries, None)
+        except PermissionError:
+            # This existing Windows folder can deny even READ_CONTROL. Never
+            # change its ACL or discard it to make an installation succeed.
+            # Restores merge copied files; the untouched folder remains in place.
+            skip.add('pending_messages')
+            preserved.append({'path': str(pending), 'reason': 'Existing Windows access denial; preserved in place, not copied'})
+            print('pending_messages is unreadable; preserved in place and omitted from copied backup')
+    write(directory / 'preserved-in-place.json', preserved)
     shutil.copytree(HOME, directory / 'home', ignore=lambda p, names: skip.intersection(names) if Path(p) == HOME else [])
     desktop_home = Path(os.environ['APPDATA']) / 'Hermes'
     if desktop_home.exists():
