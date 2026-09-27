@@ -13,6 +13,23 @@ def test_nonfork_retains_upstream_update(tmp_path):
     assert not handle_update(tmp_path, Namespace())
 
 
+def test_production_routes_checks_and_updates_to_local_controller(tmp_path, monkeypatch):
+    import hermes_cli.ahmer_release as module
+    root = tmp_path / 'hermes-agent'
+    root.mkdir()
+    (root / 'Hermes-Ahmer.md').touch()
+    (tmp_path / 'ahmer-release.json').touch()
+    controller = tmp_path / 'controller.cmd'
+    controller.touch()
+    monkeypatch.setattr(module, 'CONTROLLER', controller)
+    calls = []
+    monkeypatch.setattr(module.subprocess, 'run', lambda argv, **kwargs:
+                        calls.append(argv) or Namespace(returncode=0))
+    assert handle_update(root, Namespace(check=True))
+    assert handle_update(root, Namespace(check=False))
+    assert calls == [[str(controller), 'status'], [str(controller), 'deploy']]
+
+
 def test_contained_runtime_subcommands_keep_the_release_launcher(tmp_path):
     import json
     from hermes_cli._launchers import installation_command

@@ -253,6 +253,8 @@ def deploy(rollback=False):
             target = HOME / 'bin' / f'{name}.cmd'
             prefix = '' if name == 'hermes' else '--run-module acp_adapter.entry '
             target.write_text('@echo off\ncall "C:\\Hermes-Ahmer\\bin\\hermes.cmd" ' + prefix + '%*\n', encoding='utf-8')
+        (HOME / 'bin/ahmer-release.cmd').write_text(
+            '@echo off\ncall "C:\\Hermes-Ahmer\\bin\\ahmer-release.cmd" %*\n', encoding='utf-8')
         cli(release, 'gateway', 'start')
         time.sleep(15)
         result = cli(release, 'gateway', 'status', capture=True)
