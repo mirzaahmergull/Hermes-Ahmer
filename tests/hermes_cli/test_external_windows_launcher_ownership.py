@@ -20,3 +20,20 @@ def test_windows_exposure_preserves_external_controller(tmp_path, monkeypatch):
     assert _launchers.expose_cli(root) == {"ok": True, "skipped": "externally-owned"}
     assert _launchers.expose_cli(root, create=False) == {"ok": True, "skipped": "externally-owned"}
     assert launcher.read_bytes() == before
+
+
+def test_personal_development_terminal_never_registers_global_commands(tmp_path, monkeypatch):
+    root = tmp_path / "development"
+    root.mkdir()
+    (root / ".git").mkdir()
+    (root / "Hermes-Ahmer.md").write_text("Personal development checkout")
+    monkeypatch.setenv("HERMES_AHMER_DEVELOPMENT", "1")
+    monkeypatch.setattr(_launchers, "_is_windows", lambda: True)
+    monkeypatch.setattr(steward, "read_install_stamp", lambda _: {})
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Development must not write global user commands or PATH")
+
+    monkeypatch.setattr(_launchers, "_expose_windows_user_bin", forbidden)
+    assert _launchers.expose_cli(root) == {"ok": True, "skipped": "development-terminal-owned"}
+    assert _launchers.expose_cli(root, create=False) == {"ok": True, "skipped": "development-terminal-owned"}

@@ -20,6 +20,9 @@ The user owns this policy; upstream AGENTS.md still governs coding conventions.
   sample config, copy secrets into Git, or point developer tests at it.
 - Development home: `C:\Users\mirza\AppData\Local\Hermes-Ahmer-dev`.
   Build and candidate tests use disposable homes outside production.
+  Dot-source `scripts/ahmer/dev.ps1` before activation; its development marker
+  prevents source bootstrap from registering developer commands on the user
+  PATH. Development activation owns only that terminal's source function.
 - Retain the original installation and previous production releases. No
   automatic uninstall, pruning, release deletion, or destructive clean command.
 

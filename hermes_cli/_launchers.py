@@ -432,6 +432,11 @@ def expose_cli(project_root: Path | None = None, *, create: bool = True) -> dict
 
     if read_install_stamp(root).get("updateMechanism") == "external":
         return {"ok": True, "skipped": "externally-owned"}
+    if (os.environ.get("HERMES_AHMER_DEVELOPMENT") == "1"
+            and (root / "Hermes-Ahmer.md").is_file() and (root / ".git").exists()):
+        # A dedicated development terminal already owns its source function.
+        # It must not register development shims on the machine-wide user PATH.
+        return {"ok": True, "skipped": "development-terminal-owned"}
     if _is_windows():
         # The installer stages the user-facing commands into $HERMES_HOME\bin
         # and registers that directory in the User PATH. An update skipped both
