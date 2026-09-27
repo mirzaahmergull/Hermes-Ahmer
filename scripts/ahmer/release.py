@@ -193,6 +193,15 @@ def database_check():
                 print(f'{name}: ok')
 
 
+def refresh_gateway_launcher(release):
+    manifest = read(release / 'manifest.json')
+    code = ("import sys;sys.path.insert(0,sys.argv[1]);import hermes_bootstrap;"
+            "from hermes_cli.gateway_windows import _write_task_script;"
+            "print(_write_task_script())")
+    run([release / manifest['runtime']['storePython'], '-I', '-c', code,
+         release / 'hermes-agent'], env=release_env(release))
+
+
 def desktop_shortcut():
     # Keep the existing application identity and Roaming profile.
     script = "$s=(New-Object -ComObject WScript.Shell).CreateShortcut($env:APPDATA+'\\Microsoft\\Windows\\Start Menu\\Programs\\Hermes.lnk');$s.TargetPath='C:\\Windows\\System32\\wscript.exe';$s.Arguments='\"C:\\Hermes-Ahmer\\bin\\desktop.vbs\"';$s.WorkingDirectory='C:\\Hermes-Ahmer';$s.Save()"
@@ -257,6 +266,7 @@ def deploy(rollback=False):
             target.write_text('@echo off\ncall "C:\\Hermes-Ahmer\\bin\\hermes.cmd" ' + prefix + '%*\n', encoding='utf-8')
         (HOME / 'bin/ahmer-release.cmd').write_text(
             '@echo off\ncall "C:\\Hermes-Ahmer\\bin\\ahmer-release.cmd" %*\n', encoding='utf-8')
+        refresh_gateway_launcher(release)
         cli(release, 'gateway', 'start')
         time.sleep(15)
         result = cli(release, 'gateway', 'status', capture=True)
