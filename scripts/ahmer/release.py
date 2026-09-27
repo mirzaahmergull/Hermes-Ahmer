@@ -83,6 +83,7 @@ def build(ref):
     run(['git', 'clone', '--local', '--no-hardlinks', SOURCE, source])
     run(['git', '-C', source, 'checkout', '--detach', sha])
     env = isolated(job / 'home')
+    env['HERMES_RUNTIME_DIR'] = str(BUILDS / 'cache/tools')
     # Build from the independent committed source, never from the development tree.
     command = [BOOTSTRAP, '-B', source / 'scripts/bundles/stage.py',
                '--out', release, '--ref', sha, '--cache', BUILDS / 'cache/uv',

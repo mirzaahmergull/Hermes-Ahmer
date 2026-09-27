@@ -116,7 +116,10 @@ def stage_native(args) -> int:
     with tempfile.TemporaryDirectory(prefix=".build-", dir=out) as work:
         env = {**base_env, "HOME": work, "USERPROFILE": work,
                "HERMES_HOME": str(Path(work) / ".hermes"),
-               "HERMES_RUNTIME_DIR": str(out / "tools"),
+               # Windows cannot replace DLLs loaded by the packaging worker.
+               # Bootstrap it from the reusable store when copying that store
+               # into a fresh payload, so destination Python remains inert.
+               "HERMES_RUNTIME_DIR": str(getattr(args, "tools", None) or out / "tools"),
                "HERMES_PYTHON_SRC_ROOT": str(root),
                "XDG_CACHE_HOME": str(Path(work) / "cache"),
                "XDG_CONFIG_HOME": str(Path(work) / "config"),
