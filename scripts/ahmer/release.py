@@ -229,6 +229,15 @@ def launch_desktop():
     run(['wscript.exe', '//B', '//Nologo', ROOT / 'bin/desktop.vbs'])
 
 
+def publish_user_launchers():
+    for name in ('hermes', 'hermes-acp'):
+        prefix = '' if name == 'hermes' else '--run-module acp_adapter.entry '
+        (HOME / 'bin' / f'{name}.cmd').write_text(
+            '@echo off\ncall "C:\\Hermes-Ahmer\\bin\\hermes.cmd" ' + prefix + '%*\n', encoding='utf-8')
+    (HOME / 'bin/ahmer-release.cmd').write_text(
+        '@echo off\ncall "C:\\Hermes-Ahmer\\bin\\ahmer-release.cmd" %*\n', encoding='utf-8')
+
+
 def deploy(rollback=False):
     selected = ROOT / ('previous.json' if rollback else 'candidate.json')
     receipt = read(selected)
@@ -242,8 +251,7 @@ def deploy(rollback=False):
         # in the fresh backup. Copy rather than deleting any directory.
         if receipt.get('backup'):
             shutil.copytree(Path(receipt['backup']) / 'home', HOME, dirs_exist_ok=True)
-        shutil.copyfile(ROOT / 'original/hermes.cmd', HOME / 'bin/hermes.cmd')
-        shutil.copyfile(ROOT / 'original/hermes-acp.cmd', HOME / 'bin/hermes-acp.cmd')
+        publish_user_launchers()
         write(ROOT / 'active.json', receipt)
         write(ROOT / 'previous.json', {**current, 'backup': str(saved)})
         original_cli('gateway', 'start')
@@ -289,12 +297,7 @@ def deploy(rollback=False):
               'path': str(HOME / 'hermes-agent'), 'verified': True, 'backup': str(saved)})
     write(ROOT / 'active.json', {**receipt, 'backup': str(saved)})
     try:
-        for name in ('hermes', 'hermes-acp'):
-            target = HOME / 'bin' / f'{name}.cmd'
-            prefix = '' if name == 'hermes' else '--run-module acp_adapter.entry '
-            target.write_text('@echo off\ncall "C:\\Hermes-Ahmer\\bin\\hermes.cmd" ' + prefix + '%*\n', encoding='utf-8')
-        (HOME / 'bin/ahmer-release.cmd').write_text(
-            '@echo off\ncall "C:\\Hermes-Ahmer\\bin\\ahmer-release.cmd" %*\n', encoding='utf-8')
+        publish_user_launchers()
         refresh_gateway_launcher(release)
         cli(release, 'gateway', 'start')
         time.sleep(15)
@@ -364,6 +367,11 @@ if args[command_index:command_index + 1] in (['desktop'], ['gui']):
         sys.exit('Production desktop is prebuilt. Use ahmer-release build in the development workflow.')
     print('Launching the selected Hermes-Ahmer desktop release.')
     sys.exit(subprocess.call([sys.executable, '-I', r'C:\\Hermes-Ahmer\\bin\\desktop.py']))
+if args[command_index:command_index + 1] == ['update']:
+    if '--gateway' in args:
+        sys.exit('Use ahmer-release deploy in PowerShell; gateway chat cannot replace its own host.')
+    action = 'status' if '--check' in args or '--plan' in args else 'deploy'
+    sys.exit(subprocess.call([sys.executable, '-I', r'C:\\Hermes-Ahmer\\bin\\release.py', action]))
 if selection.get('kind') == 'original':
     env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
                HERMES_RUNTIME_DIR=str(Path(os.environ['LOCALAPPDATA']) / 'hermes' / 'tools'))
