@@ -150,6 +150,37 @@ def test_build_gateway_argv_keeps_venv_console_python_for_uv_venv(monkeypatch, t
 
 
 @pytest.mark.platforms("windows")
+def test_managed_gateway_launchers_bootstrap_selected_generation_on_each_restart(monkeypatch, tmp_path):
+    """A scheduled restart must not pin an old dependency generation or inherit a stale venv."""
+    from hermes_cli import _launchers
+
+    project = tmp_path / "hermes-agent"
+    project.mkdir()
+    store_python = tmp_path / "tools" / "python.exe"
+    store_python.parent.mkdir()
+    store_python.touch()
+    old_generation = tmp_path / "installs" / "old" / "venv" / "Lib" / "site-packages"
+    monkeypatch.setattr(gateway, "PROJECT_ROOT", project)
+    monkeypatch.setattr(_launchers, "resolve_store_python", lambda root: store_python)
+    monkeypatch.setattr(gateway_windows, "_assert_windows", lambda: None)
+    monkeypatch.setattr(gateway_windows, "_launcher_settings", lambda home=None: (
+        str(store_python), str(tmp_path), str(tmp_path), "",
+    ))
+    monkeypatch.setenv("PYTHONPATH", str(old_generation))
+
+    argv, _, _ = gateway_windows._build_gateway_argv()
+    cmd = gateway_windows._build_gateway_cmd_script(str(store_python), str(tmp_path), str(tmp_path), "")
+    vbs = gateway_windows._build_gateway_vbs_script(str(store_python), str(tmp_path), str(tmp_path), "")
+
+    assert argv[:3] == [str(store_python), "-I", "-c"]
+    assert "import hermes_bootstrap" in argv[3]
+    assert "os.environ.pop('PYTHONPATH', None)" in argv[3]
+    assert "gateway" in argv[4:]
+    assert "import hermes_bootstrap" in cmd and "import hermes_bootstrap" in vbs
+    assert str(old_generation) not in cmd + vbs
+
+
+@pytest.mark.platforms("windows")
 def test_spawn_detached_marks_primary_breakaway_success(monkeypatch, tmp_path, caplog):
     """A successful breakaway spawn reports true without a warning."""
     argv = ["python.exe", "-m", "hermes_cli.main", "gateway", "run"]

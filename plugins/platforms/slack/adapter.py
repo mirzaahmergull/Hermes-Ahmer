@@ -285,7 +285,14 @@ def _session_status_method(client: Any):
     if _sdk_supports_agent_sessions():
         method = getattr(client, "agents_sessions_setStatus", None)
         if method is not None:
-            return method
+            async def set_agent_status(*, channel_id, thread_ts, status):
+                # Agent sessions use lifecycle enums, unlike the legacy free-text
+                # loading label. Empty text means the turn finished, not closed.
+                return await method(
+                    channel_id=channel_id, thread_ts=thread_ts,
+                    status="processing" if status else "active",
+                )
+            return set_agent_status
     return client.assistant_threads_setStatus
 
 

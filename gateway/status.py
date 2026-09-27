@@ -516,7 +516,7 @@ def _read_process_cmdline(pid: int) -> Optional[str]:
         import psutil  # type: ignore
         cmdline_parts = psutil.Process(pid).cmdline()
         if cmdline_parts:
-            return " ".join(cmdline_parts)
+            return subprocess.list2cmdline(cmdline_parts) if _IS_WINDOWS else " ".join(cmdline_parts)
     if not _IS_WINDOWS:
         with contextlib.suppress(OSError, subprocess.TimeoutExpired):
             result = subprocess.run(
@@ -609,7 +609,21 @@ def _gateway_command_subcommand(command: str | None) -> str | None:
     # ``python -c <src> … -m hermes_cli.main gateway run``: the trailing argv belongs to the program
     # the inline source will spawn later, not to this process (#107002). Case-preserving tokens:
     # the operand-taking ``-X``/``-W``/``-Q`` must not be conflated with ``-q``/``-b``.
-    if command_line_runs_inline_source(cased_tokens):
+    inline_index = inline_source_flag_index(cased_tokens)
+    if inline_index is not None:
+        # The installation-bound Windows gateway launcher is a *known* -I -c program that
+        # imports hermes_bootstrap before executing Hermes. Unlike a restart watcher's arbitrary
+        # inline source, its trailing argv belongs to this very process. Match the complete
+        # bootstrap shape, not a loose "gateway run" substring (#107002).
+        source = cased_tokens[inline_index + 1] if len(cased_tokens) > inline_index + 1 else ""
+        if basenames[0] in {"python", "python.exe", "pythonw", "pythonw.exe"}:
+            from hermes_cli._launchers import runtime_command
+            expected_source = runtime_command(
+                Path(__file__).resolve().parents[1], (), python="python"
+            )[3]
+            if source == expected_source.replace("\\", "/"):
+                nested = "python -m hermes_cli.main " + " ".join(raw_tokens[inline_index + 2:])
+                return _gateway_command_subcommand(nested)
         return None
     # The launchd job's osascript wrapper (gateway_launchd.launchd_program_arguments) carries the gateway argv
     # inside one JXA script string; the gateway itself is its child and is matched on its own command line.

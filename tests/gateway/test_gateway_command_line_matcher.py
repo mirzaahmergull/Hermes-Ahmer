@@ -120,6 +120,20 @@ def test_rejects_interpreter_running_inline_source(cmd):
     assert matches_runtime(cmd) is False
 
 
+def test_managed_bootstrap_gateway_is_live_but_an_inline_restart_watcher_is_not():
+    from pathlib import Path
+    from hermes_cli._launchers import runtime_command
+
+    bootstrap = runtime_command(Path(__file__).resolve().parents[2], ["gateway", "run"], python="python.exe")[3]
+    live = f'python.exe -I -c "{bootstrap}" gateway run'
+    watcher = f'python.exe -c "import time; time.sleep(1)" 1234 {live}'
+    assert matches(live) is True
+    assert matches_runtime(live) is True
+    assert matches(watcher) is False
+    assert matches('python.exe -I -c "import time" gateway run') is False
+    assert matches(f'python.exe -I -c "{bootstrap.replace("import hermes_bootstrap;", "print(123); import hermes_bootstrap;")}" gateway run') is False
+
+
 # Spawn INTENT is the mirror image of process identity: the same wrapper that must not be read as a
 # live gateway MUST still be recognised as "launching this eventually produces a gateway runtime".
 # tests/_fixtures/live_system_guard.py relies on it — without this, the autouse guard stopped

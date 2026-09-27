@@ -347,12 +347,15 @@ def _stable_gateway_working_dir(project_root: Path) -> str:
 # ── Script rendering
 
 def _gateway_run_argv(python_exe: str, profile_arg: str) -> list[str]:
-    """``python -m hermes_cli.main [--profile X] gateway run`` — shared by every launcher renderer."""
-    argv = [python_exe, "-m", "hermes_cli.main"]
-    if profile_arg:
-        argv.extend(profile_arg.split())
-    argv.extend(["gateway", "run"])
-    return argv
+    """Build a gateway command that resolves managed dependencies on each launch."""
+    args = [*profile_arg.split(), "gateway", "run"] if profile_arg else ["gateway", "run"]
+    from hermes_cli.gateway import PROJECT_ROOT
+    from hermes_cli._launchers import resolve_store_python, runtime_command
+
+    store_python = resolve_store_python(PROJECT_ROOT)
+    if store_python is not None and os.path.normcase(str(store_python)) == os.path.normcase(python_exe):
+        return runtime_command(PROJECT_ROOT, args, python=python_exe)
+    return [python_exe, "-m", "hermes_cli.main", *args]
 
 
 def _launcher_settings(home: Path | None = None) -> tuple[str, str, str, str]:

@@ -47,6 +47,18 @@ def test_psutil_answers_without_forking_ps(no_proc, monkeypatch):
     assert cmdline and sys.executable.split("/")[-1] in cmdline
 
 
+@pytest.mark.platforms("windows")
+def test_psutil_preserves_inline_bootstrap_argument_boundary(no_proc, monkeypatch):
+    import psutil
+
+    source = "import hermes_bootstrap; runpy.run_module('hermes_cli.main', run_name='__main__', alter_sys=True)"
+    monkeypatch.setattr(psutil, "Process", lambda pid: type("P", (), {
+        "cmdline": lambda self: ["python.exe", "-I", "-c", source, "gateway", "run"],
+    })())
+    line = status._read_process_cmdline(123)
+    assert status.shlex.split(line, posix=False)[3].strip('"') == source
+
+
 def test_ps_still_answers_when_psutil_cannot(no_proc, monkeypatch):
     """macOS raises AccessDenied across users; ps still reports those, so it stays the fallback."""
     import psutil
