@@ -32,6 +32,7 @@ beforeEach((): void => {
 })
 
 afterEach((): void => {
+  delete process.env.HERMES_AHMER_DESKTOP
   delete process.env.HERMES_DESKTOP_VARIANT
   delete process.env.HERMES_PAYLOAD_TAG
   delete process.env.HERMES_BUILD_COMMIT
@@ -51,6 +52,20 @@ async function identityForVariant(variant: string | undefined): Promise<ProductI
 
   return (await import('./product-identity')).PRODUCT_IDENTITY
 }
+
+test('personal commit desktop keeps the installed Hermes profile and has no update feed', async (): Promise<void> => {
+  process.env.HERMES_AHMER_DESKTOP = '1'
+  process.env.HERMES_BUILD_COMMIT = 'a'.repeat(40)
+  const identity = await identityForVariant('light')
+  assert.equal(identity.displayName, 'Hermes')
+  assert.equal(identity.appNamePascal, 'Hermes')
+  assert.equal(identity.windowsExecutableName, 'Hermes')
+  assert.equal(identity.channel, null)
+  const runtime = await import('./product-identity')
+  const app = { getPath: () => '', setPath: () => assert.fail('must retain existing userData'),
+    setName: () => assert.fail('must retain existing identity') }
+  assert.equal(runtime.applyDesktopIdentity(app, identity), null)
+})
 
 test('baked runtime identity never evaluates ambient build selectors', async (): Promise<void> => {
   const dir: string = fs.mkdtempSync(path.join(os.tmpdir(), 'baked-identity-'))

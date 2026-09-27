@@ -101,7 +101,8 @@ def build(ref):
         command += ['--extra', extra]
     with (job / 'build.log').open('w', encoding='utf-8') as log:
         run(command, cwd=source, env=env, stdout=log, stderr=subprocess.STDOUT)
-    desktop_env = dict(env, HERMES_RUNTIME_DIR=str(BUILDS / 'cache/desktop/tools'))
+    desktop_env = dict(env, HERMES_RUNTIME_DIR=str(BUILDS / 'cache/desktop/tools'),
+                       HERMES_AHMER_DESKTOP='1')
     with (job / 'desktop.log').open('w', encoding='utf-8') as log:
         run([BOOTSTRAP, '-B', source / 'scripts/bundles/desktop.py', '--commit', sha,
              '--variant', 'light', '--work', job / 'desktop', '--cache',
