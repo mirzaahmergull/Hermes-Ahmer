@@ -18,6 +18,7 @@ SOURCE = Path(r'C:\dev\Hermes-Ahmer')
 BUILDS = Path(r'C:\dev\Hermes-Ahmer-builds')
 HOME = Path(os.environ['LOCALAPPDATA']) / 'hermes'
 BOOTSTRAP = ROOT / 'controller-runtime/python.exe'
+DATABASES = ('state.db', 'kanban.db', 'projects.db', 'verification_evidence.db', 'shared-state.db')
 
 
 def read(path):
@@ -197,6 +198,8 @@ def backup():
             print('pending_messages is unreadable; preserved in place and omitted from copied backup')
     write(directory / 'preserved-in-place.json', preserved)
     shutil.copytree(HOME, directory / 'home', ignore=lambda p, names: skip.intersection(names) if Path(p) == HOME else [])
+    print('Checking copied database snapshot:')
+    database_check(directory / 'home')
     desktop_home = Path(os.environ['APPDATA']) / 'Hermes'
     if desktop_home.exists():
         shutil.copytree(desktop_home, directory / 'desktop-home')
@@ -218,15 +221,32 @@ def original_cli(*args):
     return run([command, *args], env=env, text=True, encoding='utf-8', timeout=180)
 
 
-def database_check():
-    for name in ('state.db', 'kanban.db', 'projects.db', 'verification_evidence.db', 'shared-state.db'):
-        path = HOME / name
+def database_check(home=None):
+    home = HOME if home is None else Path(home)
+    for name in DATABASES:
+        path = home / name
         if path.exists():
-            with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True) as db:
+            with contextlib.closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)) as db:
                 result = db.execute('pragma quick_check').fetchone()[0]
                 if result != 'ok':
                     raise RuntimeError(f'{name}: {result}')
                 print(f'{name}: ok')
+
+
+def restore_home(snapshot):
+    """Restore logical database snapshots without overwriting mapped WAL/SHM files."""
+    snapshot = Path(snapshot)
+    database_files = {name + suffix for name in DATABASES for suffix in ('', '-wal', '-shm')}
+    shutil.copytree(snapshot, HOME, dirs_exist_ok=True,
+                    ignore=lambda path, names: database_files.intersection(names)
+                    if Path(path) == snapshot else [])
+    for name in DATABASES:
+        source = snapshot / name
+        if source.exists():
+            with contextlib.closing(sqlite3.connect(source.as_uri() + '?mode=ro', uri=True)) as src:
+                with contextlib.closing(sqlite3.connect(HOME / name, timeout=30)) as dst:
+                    src.backup(dst)
+    database_check()
 
 
 def refresh_gateway_launcher(release):
@@ -278,7 +298,7 @@ def deploy(rollback=False):
         # Restore the launchers and home snapshot together; preserve current data
         # in the fresh backup. Copy rather than deleting any directory.
         if receipt.get('backup'):
-            shutil.copytree(Path(receipt['backup']) / 'home', HOME, dirs_exist_ok=True)
+            restore_home(Path(receipt['backup']) / 'home')
         publish_user_launchers()
         write(ROOT / 'active.json', receipt)
         write(ROOT / 'previous.json', {**current, 'backup': str(saved)})
@@ -315,7 +335,7 @@ def deploy(rollback=False):
             shutil.copyfile(HOME / 'bin' / name, original / name)
     saved = backup()
     if rollback and receipt.get('backup'):
-        shutil.copytree(Path(receipt['backup']) / 'home', HOME, dirs_exist_ok=True)
+        restore_home(Path(receipt['backup']) / 'home')
     before = user_inventory()
     database_check()
     if current:
@@ -346,7 +366,7 @@ def deploy(rollback=False):
     except Exception:
         with contextlib.suppress(Exception):
             cli(release, 'gateway', 'stop')
-        shutil.copytree(saved / 'home', HOME, dirs_exist_ok=True)
+        restore_home(saved / 'home')
         shortcut = saved / 'Hermes.lnk'
         if shortcut.exists():
             shutil.copyfile(shortcut, Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/Hermes.lnk')
@@ -447,6 +467,11 @@ subprocess.Popen([str(executable)], env=env, cwd=root, stdin=subprocess.DEVNULL,
 
 
 def main():
+    # -I ignores PYTHONIOENCODING; Windows pipe defaults can otherwise make a
+    # healthy gateway's Unicode status text throw and trigger false recovery.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', errors='backslashreplace')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['build', 'verify', 'deploy', 'rollback', 'status', 'controller'])
     parser.add_argument('--ref', default='HEAD')

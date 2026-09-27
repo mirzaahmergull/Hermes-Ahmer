@@ -95,3 +95,7 @@ An existing Windows access denial prevents reading the legacy default-home
 this exact exception in `preserved-in-place.json`; it copies the rest of the
 accessible home and never deletes the unreadable directory during restoration.
 Do not describe this directory as backed up or its contents as verified.
+Restore the five primary databases through SQLite's backup API; do not copy
+raw WAL/SHM sidecars over mapped files. Close integrity-check connections before
+switching or restoring state. The controller explicitly uses UTF-8 output even
+under isolated Windows Python, so printing status cannot cause false recovery.
