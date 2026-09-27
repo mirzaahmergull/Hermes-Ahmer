@@ -422,6 +422,18 @@ def main():
     if args.action == 'status':
         status()
         return
+    # Refresh the external controller only from committed development source,
+    # before taking its lock. It stays current without ever executing an older
+    # release's controller during rollback.
+    if Path(__file__).resolve() == (ROOT / 'bin/release.py').resolve() and args.action in ('build', 'controller'):
+        source_controller = SOURCE / 'scripts/ahmer/release.py'
+        if args.action == 'controller' or source_controller.read_bytes() != Path(__file__).read_bytes():
+            if git('status', '--porcelain'):
+                raise RuntimeError('Commit development changes before refreshing the release controller')
+            run([BOOTSTRAP, '-I', source_controller, 'controller'])
+            if args.action == 'build':
+                run([BOOTSTRAP, '-I', ROOT / 'bin/release.py', 'build', '--ref', args.ref])
+            return
     import msvcrt
     with (ROOT / 'release.lock').open('a+b') as lock:
         lock.seek(0)

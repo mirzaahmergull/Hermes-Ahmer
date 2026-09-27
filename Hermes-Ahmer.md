@@ -30,6 +30,10 @@ fork commit into an independent build checkout, builds the native package and
 frontends, and runs candidate checks against an isolated home. Production must
 not import code, editable packages, frontend assets, or dependency files from
 the development checkout. A build is not a deployment.
+The stable build command refreshes changed release-controller code from the
+clean, committed development checkout first. `ahmer-release controller` does
+that explicitly without building or deploying. Rollback keeps this controller's
+update safeguards while selecting the prior runtime.
 
 The build also packages the light desktop app and binds its backend to the
 selected contained release. Its existing Roaming\\Hermes profile and app identity
