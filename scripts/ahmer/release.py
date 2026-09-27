@@ -208,11 +208,26 @@ def desktop_shortcut():
     run(['powershell.exe', '-NoProfile', '-Command', script])
 
 
+def stop_desktop():
+    roots = [str(ROOT / 'releases'), str(HOME / 'hermes-agent/apps/desktop/release')]
+    env = dict(os.environ, HERMES_AHMER_DESKTOP_ROOTS=json.dumps(roots))
+    script = "$roots=ConvertFrom-Json $env:HERMES_AHMER_DESKTOP_ROOTS;$ids=@(Get-CimInstance Win32_Process -Filter \"Name='Hermes.exe'\" | Where-Object {$p=$_.ExecutablePath; $p -and @($roots | Where-Object {$p.StartsWith($_+'\\',[StringComparison]::OrdinalIgnoreCase)}).Count} | ForEach-Object {$_.ProcessId});foreach($id in $ids){$p=Get-Process -Id $id -ErrorAction SilentlyContinue;if($p){[void]$p.CloseMainWindow()}};if($ids.Count){Start-Sleep -Seconds 4;foreach($id in $ids){Stop-Process -Id $id -ErrorAction SilentlyContinue};'running'}"
+    result = run(['powershell.exe', '-NoProfile', '-Command', script], env=env,
+                 capture_output=True, text=True, timeout=30)
+    return 'running' in result.stdout
+
+
+def launch_desktop():
+    run(['wscript.exe', '//B', '//Nologo', ROOT / 'bin/desktop.vbs'])
+
+
 def deploy(rollback=False):
     selected = ROOT / ('previous.json' if rollback else 'candidate.json')
     receipt = read(selected)
     if receipt.get('kind') == 'original':
         current = read(ROOT / 'active.json')
+        desktop_was_running = stop_desktop()
+        cli(Path(current['path']), 'serve', '--stop')
         cli(Path(current['path']), 'gateway', 'stop')
         saved = backup()
         # Restore the launchers and home snapshot together; preserve current data
@@ -237,12 +252,16 @@ def deploy(rollback=False):
         print('Selected release is already active')
         return
     # Never run concurrent gateways against the same user home.
+    desktop_was_running = stop_desktop()
     old = Path(current['path']) if current and current.get('kind') != 'original' else None
     if current and current.get('kind') == 'original':
+        original_cli('serve', '--stop')
         original_cli('gateway', 'stop')
     elif old:
+        cli(old, 'serve', '--stop')
         cli(old, 'gateway', 'stop')
     else:
+        run([HOME / 'bin/hermes.cmd', 'serve', '--stop'])
         run([HOME / 'bin/hermes.cmd', 'gateway', 'stop'])
         original = ROOT / 'original'
         original.mkdir(exist_ok=True)
@@ -281,6 +300,8 @@ def deploy(rollback=False):
         if changed:
             print('User files changed during startup; review deployment.json: ' + ', '.join(changed))
         database_check()
+        if desktop_was_running:
+            launch_desktop()
     except Exception:
         with contextlib.suppress(Exception):
             cli(release, 'gateway', 'stop')
