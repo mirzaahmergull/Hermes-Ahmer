@@ -83,6 +83,14 @@ def build(ref):
     release.mkdir(parents=True)
     run(['git', 'clone', '--local', '--no-hardlinks', SOURCE, source])
     run(['git', '-C', source, 'checkout', '--detach', sha])
+    identity_code = ("import sys,json,dataclasses;from pathlib import Path;"
+                     "sys.path.insert(0,sys.argv[1]);"
+                     "from hermes_cli.version_info import _git_version_info;"
+                     "print(json.dumps(dataclasses.asdict(_git_version_info(Path(sys.argv[1])))))")
+    identity = json.loads(subprocess.check_output(
+        [str(BOOTSTRAP), '-I', '-c', identity_code, str(source)], text=True))
+    if identity['commit'] != sha or identity['dirty']:
+        raise RuntimeError('Build snapshot identity is not clean or does not match selected commit')
     env = isolated(job / 'home')
     env['HERMES_RUNTIME_DIR'] = str(BUILDS / 'cache/tools')
     # Build from the independent committed source, never from the development tree.
@@ -102,8 +110,10 @@ def build(ref):
     shutil.copytree(source / 'apps/desktop/release/win-unpacked', release / 'desktop')
     stamp = {'schemaVersion': 2, 'commit': sha, 'branch': 'main',
              'source': 'commit-build', 'updateMechanism': 'external',
-             'payload': 'runtime', 'dirty': False, 'baseVersion': '0.21.5',
-             'displayVersion': f'Hermes-Ahmer {sha[:12]}', 'builtAt': name}
+             'payload': 'runtime', 'dirty': False, 'baseVersion': identity['base_version'],
+             'distance': identity['distance'], 'commitDate': identity['commit_date'],
+             'displayVersion': identity['derived_version'],
+             'builtAt': dt.datetime.now(dt.UTC).isoformat()}
     write(release / 'hermes-agent/install-stamp.json', stamp)
     shutil.copytree(source / 'scripts/ahmer', release / 'control')
     write(release / 'ahmer-release.json', {'commit': sha, 'id': name,
