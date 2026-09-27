@@ -50,7 +50,9 @@ def main(argv=None) -> int:
             ["scripts/build/web.mjs", "--source", str(source), "--icons", str(products / "icons"), "--out", str(products / "web")],
         ]
         for command in commands:
-            subprocess.run([node, *command], cwd=ROOT, env=env, check=True)
+            # Babel resolves compiler plugins from the working directory. The
+            # prepared snapshot owns node_modules; the builder checkout doesn't.
+            subprocess.run([node, *command], cwd=source, env=env, check=True)
         args.frontends = {"tui": products / "tui", "web": products / "web"}
         return stage_native(args)
 

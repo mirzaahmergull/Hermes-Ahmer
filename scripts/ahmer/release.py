@@ -50,7 +50,8 @@ def isolated(home):
 
 
 def release_env(release, home=HOME):
-    env = isolated(home)
+    env = {k: v for k, v in os.environ.items() if not k.startswith(('HERMES_', 'PYTHON'))}
+    env.update(HERMES_HOME=str(home), PYTHONIOENCODING='utf-8')
     env.update(HERMES_RUNTIME_DIR=str(release / 'tools'),
                HERMES_INSTALL_ROOT=str(release / 'hermes-agent'))
     return env
@@ -157,6 +158,13 @@ def backup():
     return directory
 
 
+def original_cli(*args):
+    command = ROOT / 'original/hermes.cmd'
+    env = dict(os.environ, HERMES_HOME=str(HOME), HERMES_RUNTIME_DIR=str(HOME / 'tools'))
+    env.pop('HERMES_INSTALL_ROOT', None)
+    return run([command, *args], env=env, text=True, encoding='utf-8', timeout=180)
+
+
 def database_check():
     for name in ('state.db', 'kanban.db', 'projects.db', 'verification_evidence.db', 'shared-state.db'):
         path = HOME / name
@@ -171,6 +179,21 @@ def database_check():
 def deploy(rollback=False):
     selected = ROOT / ('previous.json' if rollback else 'candidate.json')
     receipt = read(selected)
+    if receipt.get('kind') == 'original':
+        current = read(ROOT / 'active.json')
+        cli(Path(current['path']), 'gateway', 'stop')
+        saved = backup()
+        # Restore the launchers and home snapshot together; preserve current data
+        # in the fresh backup. Copy rather than deleting any directory.
+        if receipt.get('backup'):
+            shutil.copytree(Path(receipt['backup']) / 'home', HOME, dirs_exist_ok=True)
+        shutil.copyfile(ROOT / 'original/hermes.cmd', HOME / 'bin/hermes.cmd')
+        shutil.copyfile(ROOT / 'original/hermes-acp.cmd', HOME / 'bin/hermes-acp.cmd')
+        write(ROOT / 'active.json', receipt)
+        write(ROOT / 'previous.json', {**current, 'backup': str(saved)})
+        original_cli('gateway', 'start')
+        print('Original installation restored; newer data snapshot retained at ' + str(saved))
+        return
     release = Path(receipt['path']).resolve()
     if not release.is_relative_to((ROOT / 'releases').resolve()) or not receipt['verified']:
         raise RuntimeError('Refusing unverified or external release')
@@ -184,13 +207,24 @@ def deploy(rollback=False):
         cli(old, 'gateway', 'stop')
     else:
         run([HOME / 'bin/hermes.cmd', 'gateway', 'stop'])
+        original = ROOT / 'original'
+        original.mkdir(exist_ok=True)
+        for name in ('hermes.cmd', 'hermes-acp.cmd'):
+            shutil.copyfile(HOME / 'bin' / name, original / name)
     saved = backup()
     before = user_inventory()
     database_check()
     if current:
         write(ROOT / 'previous.json', {**current, 'backup': str(saved)})
+    else:
+        write(ROOT / 'previous.json', {'kind': 'original', 'id': 'original-installation',
+              'path': str(HOME / 'hermes-agent'), 'verified': True, 'backup': str(saved)})
     write(ROOT / 'active.json', {**receipt, 'backup': str(saved)})
     try:
+        for name in ('hermes', 'hermes-acp'):
+            target = HOME / 'bin' / f'{name}.cmd'
+            prefix = '' if name == 'hermes' else '--run-module acp_adapter.entry '
+            target.write_text('@echo off\ncall "C:\\Hermes-Ahmer\\bin\\hermes.cmd" ' + prefix + '%*\n', encoding='utf-8')
         cli(release, 'gateway', 'start')
         time.sleep(15)
         result = cli(release, 'gateway', 'status', capture=True)
@@ -208,6 +242,9 @@ def deploy(rollback=False):
         cli(release, 'gateway', 'stop')
         if current:
             write(ROOT / 'active.json', current)
+        else:
+            for name in ('hermes.cmd', 'hermes-acp.cmd'):
+                shutil.copyfile(ROOT / 'original' / name, HOME / 'bin' / name)
         raise
     print(f'Production deployed: {receipt["id"]}; data remains at {HOME}')
 
@@ -228,8 +265,21 @@ Remove-Item Env:PYTHONPATH,Env:PYTHONHOME,Env:VIRTUAL_ENV -ErrorAction SilentlyC
 & (Join-Path $release 'bin\\hermes.exe') @HermesArgs
 exit $LASTEXITCODE
 ''', encoding='utf-8')
+    (bindir / 'run.py').write_text('''import json, os, subprocess, sys
+from pathlib import Path
+root = Path(json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())['path'])
+args = sys.argv[1:]
+name = 'hermes.exe'
+if args[:2] == ['--run-module', 'acp_adapter.entry']:
+    name, args = 'hermes-acp.exe', args[2:]
+env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
+           HERMES_INSTALL_ROOT=str(root / 'hermes-agent'), HERMES_RUNTIME_DIR=str(root / 'tools'))
+for key in ('PYTHONPATH', 'PYTHONHOME', 'VIRTUAL_ENV'):
+    env.pop(key, None)
+sys.exit(subprocess.call([str(root / 'bin' / name), *args], env=env))
+''', encoding='utf-8')
     (bindir / 'hermes.cmd').write_text(
-        '@echo off\npwsh.exe -NoProfile -File "C:\\Hermes-Ahmer\\bin\\run.ps1" %*\n', encoding='utf-8')
+        f'@echo off\n"{BOOTSTRAP}" -I "{bindir / "run.py"}" %*\n', encoding='utf-8')
 
 
 def main():
