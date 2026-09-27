@@ -250,6 +250,8 @@ def deploy(rollback=False):
         if receipt.get('backup') and (Path(receipt['backup']) / 'Hermes.lnk').exists():
             shutil.copyfile(Path(receipt['backup']) / 'Hermes.lnk',
                             Path(os.environ['APPDATA']) / 'Microsoft/Windows/Start Menu/Programs/Hermes.lnk')
+        if desktop_was_running:
+            launch_desktop()
         print('Original installation restored; newer data snapshot retained at ' + str(saved))
         return
     release = Path(receipt['path']).resolve()
@@ -354,6 +356,14 @@ from pathlib import Path
 selection = json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())
 root = Path(selection['path'])
 args = sys.argv[1:]
+command_index = 0
+while command_index < len(args) and args[command_index] in ('--yolo', '--debug'):
+    command_index += 1
+if args[command_index:command_index + 1] in (['desktop'], ['gui']):
+    if any(flag in args for flag in ('--source', '--force-build', '--build-only')):
+        sys.exit('Production desktop is prebuilt. Use ahmer-release build in the development workflow.')
+    print('Launching the selected Hermes-Ahmer desktop release.')
+    sys.exit(subprocess.call([sys.executable, '-I', r'C:\\Hermes-Ahmer\\bin\\desktop.py']))
 if selection.get('kind') == 'original':
     env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
                HERMES_RUNTIME_DIR=str(Path(os.environ['LOCALAPPDATA']) / 'hermes' / 'tools'))
@@ -372,15 +382,23 @@ sys.exit(subprocess.call([str(root / 'bin' / name), *args], env=env))
         f'@echo off\n"{BOOTSTRAP}" -I "{bindir / "run.py"}" %*\n', encoding='utf-8')
     (bindir / 'desktop.py').write_text('''import json, os, subprocess
 from pathlib import Path
-root = Path(json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())['path'])
-manifest = json.loads((root / 'manifest.json').read_text())
+selection = json.loads(Path(r'C:\\Hermes-Ahmer\\active.json').read_text())
+root = Path(selection['path'])
+original = selection.get('kind') == 'original'
+manifest = json.loads((root / 'manifest.json').read_text()) if not original else None
+home = Path(os.environ['LOCALAPPDATA']) / 'hermes'
+repo = root if original else root / 'hermes-agent'
+tools = home / 'tools' if original else root / 'tools'
+python = tools / 'python-3.14.7+20260901-win32-x64/python.exe' if original else root / manifest['runtime']['storePython']
+executable = root / 'apps/desktop/release/win-unpacked/Hermes.exe' if original else root / 'desktop/Hermes.exe'
 env = dict(os.environ, HERMES_HOME=str(Path(os.environ['LOCALAPPDATA']) / 'hermes'),
-           HERMES_RUNTIME_DIR=str(root / 'tools'),
-           HERMES_DESKTOP_HERMES_ROOT=str(root / 'hermes-agent'),
-           HERMES_DESKTOP_PYTHON=str(root / manifest['runtime']['storePython']))
+           HERMES_RUNTIME_DIR=str(tools), HERMES_INSTALL_ROOT=str(repo),
+           HERMES_DESKTOP_HERMES_ROOT=str(repo), HERMES_DESKTOP_PYTHON=str(python))
 for key in ('PYTHONPATH', 'PYTHONHOME', 'VIRTUAL_ENV'):
     env.pop(key, None)
-subprocess.Popen([str(root / 'desktop/Hermes.exe')], env=env, cwd=root)
+subprocess.Popen([str(executable)], env=env, cwd=root, stdin=subprocess.DEVNULL,
+                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                 creationflags=0x01000000 | 0x08000000 | 0x00000200)
 ''', encoding='utf-8')
     (bindir / 'desktop.vbs').write_text(
         f'CreateObject("WScript.Shell").Run """{BOOTSTRAP}"" -I ""{bindir / "desktop.py"}""", 0, False\n', encoding='utf-8')
