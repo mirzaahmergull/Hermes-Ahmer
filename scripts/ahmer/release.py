@@ -107,12 +107,19 @@ def build(ref):
     shutil.copytree(source / 'scripts/ahmer', release / 'control')
     write(release / 'ahmer-release.json', {'commit': sha, 'id': name,
           'path': str(release), 'source': str(SOURCE), 'verified': False})
-    verify(release, job / 'verify-home')
+    finalize(release, job / 'verify-home')
+
+
+def finalize(release, home):
+    release = Path(release).resolve()
+    if not release.is_relative_to((ROOT / 'releases').resolve()):
+        raise RuntimeError('Candidate must be inside the production releases directory')
+    verify(release, home)
     receipt = read(release / 'ahmer-release.json')
     receipt['verified'] = True
     write(release / 'ahmer-release.json', receipt)
     write(ROOT / 'candidate.json', receipt)
-    print(f'Verified candidate: {name}')
+    print(f'Verified candidate: {receipt["id"]}')
 
 
 def verify(release, home):
@@ -122,7 +129,7 @@ def verify(release, home):
         raise RuntimeError('Package revision differs from release receipt')
     for item in ('hermes-agent/Hermes-Ahmer.md', 'bin/hermes.exe',
                  'desktop/Hermes.exe',
-                 'hermes-agent/hermes_cli/tui_dist/dist/entry.js',
+                 'hermes-agent/hermes_cli/tui_dist/entry.js',
                  'hermes-agent/hermes_cli/web_dist/index.html'):
         if not (release / item).is_file():
             raise RuntimeError(f'Missing release product: {item}')
@@ -381,8 +388,9 @@ subprocess.Popen([str(root / 'desktop/Hermes.exe')], env=env, cwd=root)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['build', 'deploy', 'rollback', 'status', 'controller'])
+    parser.add_argument('action', choices=['build', 'verify', 'deploy', 'rollback', 'status', 'controller'])
     parser.add_argument('--ref', default='HEAD')
+    parser.add_argument('--release', type=Path)
     args = parser.parse_args()
     ROOT.mkdir(parents=True, exist_ok=True)
     if args.action == 'status':
@@ -397,6 +405,9 @@ def main():
         msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
         if args.action == 'controller': install_controller()
         elif args.action == 'build': build(args.ref)
+        elif args.action == 'verify':
+            if args.release is None: parser.error('verify requires --release')
+            finalize(args.release, BUILDS / 'verification' / args.release.name)
         elif args.action == 'status': status()
         else: deploy(args.action == 'rollback')
 
