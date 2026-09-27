@@ -87,6 +87,8 @@ def build(ref):
     command = [BOOTSTRAP, '-B', source / 'scripts/bundles/stage.py',
                '--out', release, '--ref', sha, '--cache', BUILDS / 'cache/uv',
                '--tools', BUILDS / 'cache/tools']
+    for extra in read(source / 'scripts/ahmer/features.json')['extras']:
+        command += ['--extra', extra]
     with (job / 'build.log').open('w', encoding='utf-8') as log:
         run(command, cwd=source, env=env, stdout=log, stderr=subprocess.STDOUT)
     desktop_env = dict(env, HERMES_RUNTIME_DIR=str(BUILDS / 'cache/desktop/tools'))

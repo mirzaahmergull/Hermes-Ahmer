@@ -36,6 +36,12 @@ selected contained release. Its existing Roaming\\Hermes profile and app identit
 stay unchanged. The Start Menu shortcut follows the stable production launcher.
 Pinned tools are cached under Hermes-Ahmer-builds\\cache and validated by PM
 against the selected commit's lock; caches are never user configuration.
+`scripts/ahmer/features.json` records the production extras carried by the
+existing installation, including Slack, computer use, web, voice and Google.
+Personal builds explicitly select this set instead of compiling every optional
+upstream integration. SILK was not installed and is not part of this baseline;
+adding it requires a compatible wheel or C++ compiler. Expand this file before
+building when adding capabilities, and verify their imports in the candidate.
 
 `ahmer-release deploy` promotes a verified candidate, gracefully stopping the
 gateway, backing up production user data and launcher scripts, switching the

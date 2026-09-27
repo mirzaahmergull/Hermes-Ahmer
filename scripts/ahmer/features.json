@@ -1,0 +1,3 @@
+{
+  "extras": ["acp", "all", "anthropic", "audio-io", "bedrock", "computer-use", "doc-extract", "edge-tts", "google", "slack", "stt-whisper", "trace-upload", "vertex", "vision", "web", "wecom", "youtube"]
+}
